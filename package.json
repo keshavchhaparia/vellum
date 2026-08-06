@@ -1,0 +1,39 @@
+{
+  "name": "vellum-review",
+  "version": "0.1.0",
+  "description": "Turn any HTML artifact into a local, in-browser review surface an agent can poll for annotations and feedback — zero runtime dependencies, everything stays on your machine.",
+  "license": "MIT",
+  "author": "",
+  "type": "commonjs",
+  "bin": {
+    "vellum": "bin/vellum.js"
+  },
+  "main": "src/client.js",
+  "files": [
+    "bin",
+    "src",
+    "public",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "smoke-test": "node scripts/smoke-test.js"
+  },
+  "keywords": [
+    "artifact",
+    "review",
+    "annotation",
+    "html",
+    "agent",
+    "cli",
+    "local-first"
+  ],
+  "dependencies": {},
+  "repository": {
+    "type": "git",
+    "url": ""
+  }
+}
