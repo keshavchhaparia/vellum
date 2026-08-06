@@ -1,5 +1,7 @@
 # vellum-review
 
+[github.com/keshavchhaparia/vellum](https://github.com/keshavchhaparia/vellum)
+
 Turn any HTML artifact (a plan, diagram, comparison table, code diff, report —
 whatever an AI agent just built) into a **local, in-browser review surface**
 that the agent can poll for your annotations and feedback, and keep iterating
@@ -31,6 +33,13 @@ npx vellum-review <file.html>
 #    and opens your default browser to it.
 vellum path/to/artifact.html
 
+# ...or open it for review from another device on the same network
+# (phone, another laptop). No auth is added — only use this on a
+# network you trust. This restarts the daemon on 0.0.0.0, so any other
+# review session already open loses its in-memory state (see "How it
+# works" below).
+vellum path/to/artifact.html --lan
+
 # 2. Long-poll for the reviewer's feedback (annotations + free-text message).
 #    Blocks up to --timeout seconds (default 55), then returns whatever
 #    was queued, or {"status":"timeout"} if nothing came in yet — just
@@ -60,6 +69,15 @@ vellum stop
   browser you can toggle "Annotate", click any element to attach a note
   (a CSS selector for that element is generated client-side), or just type
   a free-text message, then hit "Send feedback".
+- By default the daemon binds to `127.0.0.1` only. `--lan` makes it bind to
+  `0.0.0.0` instead, and the returned URL uses the machine's detected LAN
+  IPv4 address so another device can actually browse to it. Because the
+  bind address can't change on a running server, requesting `--lan` while
+  a loopback-only daemon is already up **restarts** the daemon — any other
+  session's in-memory feedback queue/state is lost when that happens.
+  Going the other direction (already in LAN mode, then a plain open
+  without `--lan`) does **not** downgrade it back to loopback, so an
+  already-connected device isn't silently cut off.
 - Feedback is pushed into a per-session in-memory queue. `vellum poll` is a
   long-poll HTTP request that resolves as soon as something lands in that
   queue, or after the timeout — so an agent can sit in a `poll` → apply →
@@ -79,8 +97,14 @@ URL on a third-party host by default." Concretely:
 
 - No `dependencies` in `package.json` — nothing to fetch or audit beyond
   this repo and Node itself.
-- No outbound network requests anywhere in the code. Everything is
-  `127.0.0.1`.
+- No outbound network requests anywhere in the code. The daemon only
+  *listens*; it never calls out.
+- Binds to `127.0.0.1` by default. The opt-in `--lan` flag trades that for
+  cross-device convenience: it binds to `0.0.0.0` with no authentication
+  layered on top, so treat it like any other unauthenticated local dev
+  server — fine on a trusted home/office network, not for a coffee-shop
+  Wi-Fi. Session URLs contain a random 16-hex-character id, which is
+  unguessable but is not a substitute for real auth.
 - No feature that uploads or publishes content off the local machine.
 - Path handling for served assets and exported files is checked to stay
   within the artifact's own directory.

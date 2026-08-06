@@ -7,7 +7,11 @@ function usage() {
   console.log(`vellum — local, in-browser artifact review, zero external services
 
 Usage:
-  vellum <html-file> [--reopen]         Open (or resume) a review session
+  vellum <html-file> [--reopen] [--lan]  Open (or resume) a review session
+      --lan                                also bind on your LAN so another
+                                            device on the same Wi-Fi/network
+                                            can open the review URL. No auth —
+                                            only use this on a trusted network.
   vellum poll <html-file> [options]     Long-poll for feedback
       --agent-reply "<message>"           show a message in the browser first
       --timeout <seconds>                  poll timeout (default 55)
@@ -24,7 +28,9 @@ async function main() {
   if (argv[0] === '--__daemon') {
     const { startDaemon } = require('../src/daemon');
     const { writeDaemonInfo } = require('../src/client');
+    const lan = argv.includes('--lan');
     startDaemon({
+      host: lan ? 'lan' : '127.0.0.1',
       onListening(port) {
         writeDaemonInfo({ port, pid: process.pid });
       },
@@ -88,11 +94,12 @@ async function main() {
   // default: open/resume a session for the given file
   const file = cmd;
   const reopen = argv.includes('--reopen');
+  const lan = argv.includes('--lan');
   const abs = path.resolve(file);
 
   let openResult;
   try {
-    openResult = await client.request('POST', '/session/open', { htmlPath: abs, reopen });
+    openResult = await client.request('POST', '/session/open', { htmlPath: abs, reopen }, { lan });
   } catch (err) {
     if (err.statusCode === 409) {
       console.error(err.body.error);
@@ -102,9 +109,15 @@ async function main() {
     throw err;
   }
 
+  if (lan) {
+    console.log('⚠ LAN mode: this session is reachable by anyone on your current network.');
+    console.log('  There is no login/password — only use this on a network you trust.');
+  }
+
   const { openUrl } = require('../src/openUrl');
   openUrl(openResult.url);
   console.log('Review session open:', openResult.url);
+  if (lan) console.log('Share that URL with the other device — same Wi-Fi/network required.');
   console.log('Now run: vellum poll ' + JSON.stringify(file));
 }
 

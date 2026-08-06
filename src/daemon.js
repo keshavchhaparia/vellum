@@ -15,6 +15,7 @@ const path = require('path');
 const crypto = require('crypto');
 
 const { injectToolbar } = require('./inject');
+const { getLanIp } = require('./lanIp');
 
 const IDLE_TIMEOUT_MS = 30 * 60 * 1000; // self-stop after 30 min with nothing to do
 const IDLE_CHECK_INTERVAL_MS = 60 * 1000;
@@ -196,7 +197,13 @@ function createServer() {
     try {
       // GET /health
       if (req.method === 'GET' && parts.length === 1 && parts[0] === 'health') {
-        sendJson(res, 200, { ok: true, pid: process.pid, sessions: sessions.size });
+        sendJson(res, 200, {
+          ok: true,
+          pid: process.pid,
+          sessions: sessions.size,
+          lan: server.__bindHost === '0.0.0.0',
+          displayHost: server.__displayHost,
+        });
         return;
       }
 
@@ -221,7 +228,7 @@ function createServer() {
         }
         return sendJson(res, 200, {
           sessionId: session.id,
-          url: `http://127.0.0.1:${server.__port}/view/${session.id}`,
+          url: `http://${server.__displayHost}:${server.__port}/view/${session.id}`,
         });
       }
 
@@ -341,19 +348,25 @@ function createServer() {
   return server;
 }
 
-function startDaemon({ preferredPort = 51797, onListening } = {}) {
+function startDaemon({ preferredPort = 51797, host = '127.0.0.1', onListening } = {}) {
   const server = createServer();
-  server.listen(preferredPort, '127.0.0.1', () => {
+  // 'lan' is a display-only alias: bind on every interface (0.0.0.0) but
+  // report back the machine's actual LAN IP, since 0.0.0.0 isn't a
+  // browsable address from another device.
+  const bindHost = host === 'lan' ? '0.0.0.0' : host;
+  const displayHost = host === 'lan' ? getLanIp() || '127.0.0.1' : bindHost;
+  server.__bindHost = bindHost;
+  server.__displayHost = displayHost;
+
+  const onceListening = () => {
     server.__port = server.address().port;
-    if (onListening) onListening(server.__port);
-  });
+    if (onListening) onListening(server.__port, server.__bindHost, server.__displayHost);
+  };
+  server.listen(preferredPort, bindHost, onceListening);
   server.on('error', (err) => {
     if (err.code === 'EADDRINUSE') {
       // Fall back to an OS-assigned free port.
-      server.listen(0, '127.0.0.1', () => {
-        server.__port = server.address().port;
-        if (onListening) onListening(server.__port);
-      });
+      server.listen(0, bindHost, onceListening);
     } else {
       throw err;
     }

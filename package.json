@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "description": "Turn any HTML artifact into a local, in-browser review surface an agent can poll for annotations and feedback — zero runtime dependencies, everything stays on your machine.",
   "license": "MIT",
-  "author": "",
+  "author": "Keshav Chhaparia",
   "type": "commonjs",
   "bin": {
     "vellum": "bin/vellum.js"
@@ -34,6 +34,10 @@
   "dependencies": {},
   "repository": {
     "type": "git",
-    "url": ""
+    "url": "git+https://github.com/keshavchhaparia/vellum.git"
+  },
+  "homepage": "https://github.com/keshavchhaparia/vellum#readme",
+  "bugs": {
+    "url": "https://github.com/keshavchhaparia/vellum/issues"
   }
 }

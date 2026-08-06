@@ -26,8 +26,10 @@ async function main() {
   const exampleFile = path.join(__dirname, '..', 'examples', 'example.html');
 
   console.log('1. ensureDaemon() spawns a fresh background daemon...');
-  const port = await client.ensureDaemon();
+  const daemonInfo = await client.ensureDaemon();
+  const port = daemonInfo.port;
   assert.ok(port > 0, 'daemon should report a port');
+  assert.strictEqual(daemonInfo.lan, false, 'should start loopback-only by default');
   console.log('   ok, daemon on port', port);
 
   console.log('2. open a session for the example artifact...');
@@ -111,7 +113,32 @@ async function main() {
   fs.unlinkSync(dest);
   console.log('   ok, exported and cleaned up:', dest);
 
-  console.log('12. stop the daemon...');
+  console.log('12. plain (non-LAN) health check reports lan:false...');
+  const health = await client.getHealth((await client.readDaemonInfo()).port);
+  assert.strictEqual(health.lan, false);
+  console.log('   ok');
+
+  console.log('13. requesting --lan restarts the daemon bound to 0.0.0.0...');
+  const lanOpen = await client.request('POST', '/session/open', { htmlPath: exampleFile }, { lan: true });
+  assert.ok(lanOpen.url.startsWith('http://'));
+  assert.ok(!lanOpen.url.includes('127.0.0.1'), 'expected the LAN display host, not loopback: ' + lanOpen.url);
+  const lanHealth = await client.getHealth(new URL(lanOpen.url).port);
+  assert.strictEqual(lanHealth.lan, true);
+  console.log('   ok, LAN url =', lanOpen.url);
+
+  const http = require('http');
+  const lanUrlObj = new URL(lanOpen.url);
+  const reachable = await new Promise((resolve) => {
+    const req = http.request({ host: lanUrlObj.hostname, port: lanUrlObj.port, path: lanUrlObj.pathname }, (res) => {
+      resolve(res.statusCode === 200);
+    });
+    req.on('error', () => resolve(false));
+    req.end();
+  });
+  assert.ok(reachable, 'expected the artifact to be reachable over the LAN-facing address');
+  console.log('   ok, artifact reachable at the LAN address (simulating another device)');
+
+  console.log('14. stop the daemon...');
   const stopResult = await client.stopDaemon();
   assert.strictEqual(stopResult.wasRunning, true);
   console.log('   ok');

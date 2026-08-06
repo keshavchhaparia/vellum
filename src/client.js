@@ -64,50 +64,80 @@ function httpJson(port, method, urlPath, body) {
   });
 }
 
-async function isAlive(port) {
-  try {
-    const res = await httpJson(port, 'GET', '/health');
-    return !!res.ok;
-  } catch {
-    return false;
-  }
-}
-
 async function sleep(ms) {
   return new Promise((r) => setTimeout(r, ms));
 }
 
-/**
- * Returns the port of a live vellum daemon, spawning one (detached,
- * survives this CLI process exiting) if none is reachable.
- */
-async function ensureDaemon() {
-  const info = readDaemonInfo();
-  if (info && (await isAlive(info.port))) {
-    return info.port;
+/** Talk to the daemon's own /health, which is the source of truth for its
+ * current bind mode (loopback-only vs LAN) — never trust a possibly-stale
+ * local file for that. Returns null if nothing is listening. */
+async function getHealth(port) {
+  try {
+    const res = await httpJson(port, 'GET', '/health');
+    return res && res.ok ? res : null;
+  } catch {
+    return null;
   }
+}
 
+async function isAlive(port) {
+  return !!(await getHealth(port));
+}
+
+function spawnDaemon({ lan } = {}) {
   const daemonEntry = path.join(__dirname, '..', 'bin', 'vellum.js');
-  const child = spawn(process.execPath, [daemonEntry, '--__daemon'], {
+  const args = [daemonEntry, '--__daemon'];
+  if (lan) args.push('--lan');
+  const child = spawn(process.execPath, args, {
     detached: true,
     stdio: 'ignore',
     windowsHide: true,
   });
   child.unref();
+}
 
-  const deadline = Date.now() + 8000;
+async function waitForDaemon({ lan } = {}, deadlineMs = 8000) {
+  const deadline = Date.now() + deadlineMs;
   while (Date.now() < deadline) {
     await sleep(150);
-    const freshInfo = readDaemonInfo();
-    if (freshInfo && (await isAlive(freshInfo.port))) {
-      return freshInfo.port;
+    const info = readDaemonInfo();
+    if (!info) continue;
+    const health = await getHealth(info.port);
+    if (health && (!lan || health.lan)) {
+      return { port: info.port, lan: !!health.lan, displayHost: health.displayHost || '127.0.0.1' };
     }
   }
   throw new Error('timed out waiting for the vellum daemon to start');
 }
 
-async function request(method, urlPath, body) {
-  const port = await ensureDaemon();
+/**
+ * Returns { port, lan, displayHost } for a live vellum daemon that
+ * satisfies the request. Spawns one (detached, survives this CLI process
+ * exiting) if none is reachable. If a daemon is already running in
+ * loopback-only mode but LAN access was requested, it is restarted in LAN
+ * mode — going the other direction (LAN -> loopback) is never done
+ * automatically, since that would silently cut off anyone already
+ * connected from another device.
+ */
+async function ensureDaemon({ lan = false } = {}) {
+  const info = readDaemonInfo();
+  if (info) {
+    const health = await getHealth(info.port);
+    if (health) {
+      if (!lan || health.lan) {
+        return { port: info.port, lan: !!health.lan, displayHost: health.displayHost || '127.0.0.1' };
+      }
+      // Loopback-only, but this call needs LAN reach: restart with --lan.
+      await stopDaemon();
+      await sleep(250);
+    }
+  }
+  spawnDaemon({ lan });
+  return waitForDaemon({ lan });
+}
+
+async function request(method, urlPath, body, opts) {
+  const { port } = await ensureDaemon(opts);
   return httpJson(port, method, urlPath, body);
 }
 
@@ -127,4 +157,5 @@ module.exports = {
   request,
   stopDaemon,
   isAlive,
+  getHealth,
 };
