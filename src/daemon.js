@@ -16,6 +16,7 @@ const crypto = require('crypto');
 
 const { injectToolbar } = require('./inject');
 const { getLanIp } = require('./lanIp');
+const { ADJECTIVES, NOUNS } = require('./words');
 
 const IDLE_TIMEOUT_MS = 30 * 60 * 1000; // self-stop after 30 min with nothing to do
 const IDLE_CHECK_INTERVAL_MS = 60 * 1000;
@@ -33,7 +34,25 @@ function touch() {
 }
 
 function makeSessionId() {
-  return crypto.randomBytes(8).toString('hex');
+  // Human-typable id: "<adjective>-<noun>", e.g. "imaginative-acceptance" —
+  // easy to read aloud and retype on another device, unlike a hex string.
+  // Retry on collision (two different files landing on the same pair);
+  // after enough tries (astronomically unlikely given ~4.6k combos per
+  // session count) fall back to appending a numeric suffix so we never loop
+  // forever.
+  for (let attempt = 0; attempt < 50; attempt++) {
+    const adjective = ADJECTIVES[crypto.randomInt(ADJECTIVES.length)];
+    const noun = NOUNS[crypto.randomInt(NOUNS.length)];
+    const id = `${adjective}-${noun}`;
+    if (!sessionIdToPath.has(id)) return id;
+  }
+  let suffix = 2;
+  let id;
+  do {
+    id = `${ADJECTIVES[crypto.randomInt(ADJECTIVES.length)]}-${NOUNS[crypto.randomInt(NOUNS.length)]}-${suffix}`;
+    suffix++;
+  } while (sessionIdToPath.has(id));
+  return id;
 }
 
 function getOrCreateSession(absHtmlPath) {
