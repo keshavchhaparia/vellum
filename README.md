@@ -103,8 +103,12 @@ URL on a third-party host by default." Concretely:
   cross-device convenience: it binds to `0.0.0.0` with no authentication
   layered on top, so treat it like any other unauthenticated local dev
   server — fine on a trusted home/office network, not for a coffee-shop
-  Wi-Fi. Session URLs contain a random 16-hex-character id, which is
-  unguessable but is not a substitute for real auth.
+  Wi-Fi. Session URLs contain a human-typable `<adjective>-<noun>` id
+  (~4,480 combinations) rather than a long random token — easy to read
+  aloud and retype on a second device, but guessable with enough attempts,
+  so treat it the same as any other unauthenticated local dev server: fine
+  for handing to a specific person on a trusted network, not a substitute
+  for real auth against an untrusted one.
 - No feature that uploads or publishes content off the local machine.
 - Path handling for served assets and exported files is checked to stay
   within the artifact's own directory.
@@ -114,9 +118,14 @@ Read `src/daemon.js` — it's the entire attack surface, and it's short.
 ## Using this as an agent skill
 
 If your agent tooling supports Markdown "skill" files, point the agent at
-this CLI instead of `npx`-ing an unknown package: have it write the
-artifact HTML, run `vellum <file>`, then loop on `vellum poll <file>` to
-receive your feedback, exactly as documented above.
+this CLI instead of `npx`-ing an unknown package. [`SKILL.md`](./SKILL.md)
+in this repo is the canonical skill definition — copy or symlink it into
+your project's skill directory (e.g. `.agents/skills/vellum/SKILL.md`)
+rather than forking it, so fixes and new capabilities land in one place.
+It documents the full workflow (open → poll → apply feedback → end),
+visual-design guidance for the artifacts themselves, and the command
+reference — have the agent write the artifact HTML, run `vellum <file>`,
+then loop on `vellum poll <file>` to receive your feedback.
 
 ## License
 
